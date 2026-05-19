@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a14">
+<meta name="description" content="Track medications, share photo proof with your partner, never miss a dose.">
+
+<!-- PWA Meta -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MedCare">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="MedCare">
+
+<!-- Apple Touch Icons -->
+<link rel="apple-touch-icon" href="icons/icon-152x152.png">
+<link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
+
+<!-- Manifest -->
+<link rel="manifest" href="manifest.json">
+
+<!-- Splash / favicon -->
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512x512.png">
+
+<title>MedCare — Medication Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a14;
+    --surface: #12121f;
+    --surface2: #1a1a2e;
+    --border: #2a2a45;
+    --accent: #e8a87c;
+    --accent2: #7c9ee8;
+    --success: #7ce8a8;
+    --danger: #e87c7c;
+    --text: #f0ede8;
+    --muted: #8884a0;
+    --pill-glow: 0 0 20px rgba(232,168,124,0.3);
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    overscroll-behavior: none;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    overflow-x: hidden;
+    padding-top: var(--safe-top);
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.4;
+  }
+
+  /* ─── SCREENS ─── */
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: block; animation: fadeIn 0.4s ease; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity: 0.5; } }
+  @keyframes glow { 0%,100% { box-shadow: var(--pill-glow); } 50% { box-shadow: 0 0 40px rgba(232,168,124,0.5); } }
+  @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+  /* ─── INSTALL PROMPT ─── */
+  #installPrompt {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 3000;
+    padding: 0 16px calc(16px + var(--safe-bottom));
+    transform: translateY(100%);
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  #installPrompt.show { transform: translateY(0); }
+
+  .install-card {
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    border-radius: 20px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 -4px 40px rgba(0,0,0,0.5), var(--pill-glow);
+  }
+
+  .install-icon {
+    width: 50px; height: 50px;
+    background: linear-gradient(135deg, #e8a87c, #c87840);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+
+  .install-text { flex: 1; }
+  .install-text .title { font-size: 0.95rem; font-weight: 600; }
+  .install-text .sub { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .install-actions { display: flex; gap: 8px; }
+
+  .install-btn {
+    padding: 9px 16px;
+    background: linear-gradient(135deg, #e8a87c, #c87840);
+    border: none;
+    border-radius: 10px;
+    color: #0a0a14;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .dismiss-btn {
+    padding: 9px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+
+  /* ─── OFFLINE BANNER ─── */
+  #offlineBanner {
+    position: fixed;
+    top: var(--safe-top);
+    left: 0; right: 0;
+    background: var(--danger);
+    color: #0a0a14;
+    text-align: center;
+    padding: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    z-index: 4000;
+    display: none;
+  }
+
+  /* ─── LANDING ─── */
+  #landing {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 40px 24px;
+    text-align: center;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, #1e1a35 0%, transparent 70%);
+  }
+
+  .landing-icon {
+    width: 90px; height: 90px;
+    background: linear-gradient(135deg, #e8a87c, #c87840);
+    border-radius: 28px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px;
+    margin-bottom: 28px;
+    box-shadow: 0 8px 40px rgba(232,168,124,0.4);
+    animation: glow 3s ease-in-out infinite;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .landing-icon::after {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%; width: 60%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    animation: shimmer 3s infinite;
+  }
+
+  .landing h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.4rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #f0ede8, #e8a87c);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+  }
+
+  .landing > p {
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.6;
+    max-width: 300px;
+    margin-bottom: 48px;
+  }
+
+  .role-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 20px 24px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    text-align: left;
+    width: 100%;
+    max-width: 340px;
+    margin-bottom: 14px;
+  }
+
+  .role-card:hover, .role-card:active {
+    border-color: var(--accent);
+    background: var(--surface2);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(232,168,124,0.15);
+  }
+
+  .role-card .icon { font-size: 2rem; }
+  .role-card .label { font-size: 1.05rem; font-weight: 500; }
+  .role-card .sublabel { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+
+  /* ─── APP HEADER ─── */
+  .app-header {
+    padding: 20px 20px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .app-header h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.4rem;
+    background: linear-gradient(135deg, #f0ede8, #e8a87c);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .icon-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s;
+  }
+  .icon-btn:hover { border-color: var(--accent); }
+
+  /* ─── DATE STRIP ─── */
+  .date-strip {
+    padding: 16px 20px 8px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* ─── SUMMARY BAR ─── */
+  .summary-bar {
+    display: flex;
+    gap: 10px;
+    padding: 16px 20px 8px;
+  }
+
+  .summary-chip {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+  }
+
+  .summary-chip .num { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 700; }
+  .summary-chip .lbl { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .chip-done .num { color: var(--success); }
+  .chip-missed .num { color: var(--danger); }
+  .chip-pending .num { color: var(--accent2); }
+
+  /* ─── DOSE CARDS ─── */
+  .doses-container { padding: 8px 20px 120px; }
+
+  .dose-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 18px 20px;
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
+    animation: slideUp 0.4s ease both;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .dose-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    border-radius: 4px 0 0 4px;
+    background: var(--border);
+    transition: background 0.3s;
+  }
+
+  .dose-card.done::before { background: var(--success); }
+  .dose-card.missed::before { background: var(--danger); }
+  .dose-card.upcoming::before { background: var(--accent2); }
+  .dose-card.current::before { background: var(--accent); animation: pulse 2s infinite; }
+  .dose-card.done { opacity: 0.75; }
+
+  .dose-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .dose-time { font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 700; }
+  .dose-label { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+
+  .status-badge {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .badge-done { background: rgba(124,232,168,0.15); color: var(--success); border: 1px solid rgba(124,232,168,0.3); }
+  .badge-missed { background: rgba(232,124,124,0.15); color: var(--danger); border: 1px solid rgba(232,124,124,0.3); }
+  .badge-upcoming { background: rgba(124,158,232,0.15); color: var(--accent2); border: 1px solid rgba(124,158,232,0.3); }
+  .badge-current { background: rgba(232,168,124,0.15); color: var(--accent); border: 1px solid rgba(232,168,124,0.3); }
+
+  .med-name { font-size: 1rem; font-weight: 500; margin-bottom: 4px; }
+  .med-dose-info { font-size: 0.82rem; color: var(--muted); }
+
+  .proof-thumb {
+    width: 100%; max-height: 160px; object-fit: cover;
+    border-radius: 10px; margin-top: 12px; border: 1px solid var(--border);
+  }
+
+  .done-btn {
+    width: 100%; margin-top: 14px; padding: 13px;
+    background: linear-gradient(135deg, #e8a87c, #c87840);
+    border: none; border-radius: 12px;
+    color: #0a0a14; font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem; font-weight: 600; cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .done-btn:active { transform: scale(0.98); }
+
+  /* ─── SETUP ─── */
+  .setup-form { padding: 20px 20px 120px; }
+
+  .form-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .form-section h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem; margin-bottom: 16px; color: var(--accent);
+  }
+
+  .form-row { margin-bottom: 14px; }
+
+  label {
+    display: block; font-size: 0.8rem; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;
+  }
+
+  input[type="text"], input[type="time"], input[type="number"] {
+    width: 100%; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; color: var(--text);
+    font-family: 'DM Sans', sans-serif; font-size: 0.95rem;
+    outline: none; transition: border-color 0.2s;
+    -webkit-appearance: none;
+  }
+  input:focus { border-color: var(--accent); }
+
+  .time-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .save-btn {
+    width: 100%; padding: 15px;
+    background: linear-gradient(135deg, #e8a87c, #c87840);
+    border: none; border-radius: 14px;
+    color: #0a0a14; font-family: 'DM Sans', sans-serif;
+    font-size: 1rem; font-weight: 600; cursor: pointer;
+    transition: all 0.2s; margin-top: 8px;
+  }
+  .save-btn:active { transform: scale(0.98); }
+
+  /* ─── PHOTO MODAL ─── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85); z-index: 1000;
+    display: none; align-items: flex-end; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; animation: fadeIn 0.2s ease; }
+
+  .modal-sheet {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 24px 24px 0 0;
+    padding: 28px 24px calc(28px + var(--safe-bottom));
+    width: 100%; max-width: 500px;
+    animation: slideUp 0.3s ease;
+  }
+
+  .modal-handle {
+    width: 36px; height: 4px;
+    background: var(--border); border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+
+  .modal-sheet h3 { font-family: 'Playfair Display', serif; font-size: 1.3rem; margin-bottom: 8px; }
+  .modal-sheet p { font-size: 0.85rem; color: var(--muted); margin-bottom: 20px; }
+
+  .photo-preview {
+    width: 100%; height: 200px; object-fit: cover;
+    border-radius: 14px; margin-bottom: 16px;
+    display: none; border: 1px solid var(--border);
+  }
+
+  .photo-placeholder {
+    width: 100%; height: 160px;
+    background: var(--bg); border: 2px dashed var(--border);
+    border-radius: 14px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: var(--muted); font-size: 0.85rem;
+    margin-bottom: 16px; cursor: pointer;
+    transition: border-color 0.2s; gap: 8px;
+  }
+  .photo-placeholder:hover { border-color: var(--accent); }
+  .photo-placeholder span { font-size: 2rem; }
+
+  .modal-actions { display: flex; gap: 10px; }
+
+  .btn-secondary {
+    flex: 1; padding: 13px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 12px;
+    color: var(--text); font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem; cursor: pointer; transition: all 0.2s;
+  }
+
+  .btn-primary {
+    flex: 2; padding: 13px;
+    background: linear-gradient(135deg, #e8a87c, #c87840);
+    border: none; border-radius: 12px;
+    color: #0a0a14; font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ─── PARTNER VIEW ─── */
+  .partner-header {
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(124,158,232,0.1), transparent);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+
+  .partner-header h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem; color: var(--accent2); margin-bottom: 4px;
+  }
+
+  .partner-header p { font-size: 0.82rem; color: var(--muted); }
+  .partner-log { padding: 0 20px 120px; }
+
+  .log-entry {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px 18px; margin-bottom: 10px;
+    animation: slideUp 0.3s ease both;
+    display: flex; gap: 14px; align-items: flex-start;
+  }
+
+  .log-icon {
+    width: 40px; height: 40px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; flex-shrink: 0;
+  }
+
+  .log-icon.done { background: rgba(124,232,168,0.15); }
+  .log-icon.missed { background: rgba(232,124,124,0.15); }
+  .log-icon.pending { background: rgba(124,158,232,0.15); }
+  .log-body { flex: 1; }
+  .log-title { font-size: 0.95rem; font-weight: 500; margin-bottom: 3px; }
+  .log-meta { font-size: 0.78rem; color: var(--muted); }
+  .log-proof { width: 100%; border-radius: 10px; margin-top: 10px; border: 1px solid var(--border); max-height: 200px; object-fit: cover; }
+
+  /* ─── NOTIFICATION BANNER ─── */
+  .notif-banner {
+    position: fixed; top: var(--safe-top); left: 0; right: 0;
+    z-index: 2000;
+    transform: translateY(-100%);
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    padding: 16px;
+  }
+  .notif-banner.show { transform: translateY(0); }
+
+  .notif-inner {
+    background: var(--surface2); border: 1px solid var(--accent);
+    border-radius: 16px; padding: 14px 18px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5), var(--pill-glow);
+    max-width: 500px; margin: 0 auto;
+  }
+
+  .notif-icon { font-size: 1.5rem; }
+  .notif-text .title { font-size: 0.9rem; font-weight: 600; }
+  .notif-text .body { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+
+  /* ─── BOTTOM NAV ─── */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(10,10,20,0.95);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding: 10px 0 calc(10px + var(--safe-bottom));
+    z-index: 100; backdrop-filter: blur(20px);
+  }
+
+  .nav-btn {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; gap: 4px;
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; padding: 6px 0; transition: color 0.2s;
+    font-family: 'DM Sans', sans-serif; font-size: 0.7rem;
+  }
+  .nav-btn.active { color: var(--accent); }
+  .nav-btn .nav-icon { font-size: 1.3rem; }
+
+  /* ─── PERM BAR ─── */
+  .perm-bar {
+    margin: 12px 20px 0;
+    background: rgba(232,168,124,0.1);
+    border: 1px solid rgba(232,168,124,0.3);
+    border-radius: 12px; padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 0.82rem; cursor: pointer; transition: all 0.2s;
+  }
+  .perm-bar:hover { background: rgba(232,168,124,0.15); }
+  .perm-bar span { flex: 1; color: var(--accent); }
+
+  /* ─── EMPTY STATE ─── */
+  .empty-state { text-align: center; padding: 60px 30px; color: var(--muted); }
+  .empty-state .empty-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.5; }
+  .empty-state h3 { font-family: 'Playfair Display', serif; font-size: 1.2rem; color: var(--text); margin-bottom: 8px; }
+  .empty-state p { font-size: 0.85rem; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<!-- OFFLINE BANNER -->
+<div id="offlineBanner">📵 You're offline — app still works!</div>
+
+<!-- NOTIFICATION BANNER -->
+<div class="notif-banner" id="notifBanner">
+  <div class="notif-inner">
+    <div class="notif-icon" id="notifIcon">💊</div>
+    <div class="notif-text">
+      <div class="title" id="notifTitle">Medication Time</div>
+      <div class="body" id="notifBody">Time to take your medication</div>
+    </div>
+  </div>
+</div>
+
+<!-- INSTALL PROMPT -->
+<div id="installPrompt">
+  <div class="install-card">
+    <div class="install-icon">💊</div>
+    <div class="install-text">
+      <div class="title">Install MedCare</div>
+      <div class="sub">Add to home screen for the full app experience</div>
+    </div>
+    <div class="install-actions">
+      <button class="install-btn" onclick="installPWA()">Install</button>
+      <button class="dismiss-btn" onclick="dismissInstall()">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ LANDING ═══════════════ -->
+<div class="screen active" id="landing">
+  <div id="landing">
+    <div class="landing-icon">💊</div>
+    <h1>MedCare</h1>
+    <p>Track medications, share photo proof with your partner, and never miss a dose.</p>
+    <div class="role-card" onclick="enterAs('patient')">
+      <span class="icon">👩‍⚕️</span>
+      <div>
+        <div class="label">I'm taking medication</div>
+        <div class="sublabel">Log doses & upload photo proof</div>
+      </div>
+    </div>
+    <div class="role-card" onclick="enterAs('partner')">
+      <span class="icon">🫶</span>
+      <div>
+        <div class="label">I'm the partner / caregiver</div>
+        <div class="sublabel">Monitor & get notified</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PATIENT APP ═══════════════ -->
+<div class="screen" id="patientApp">
+  <div id="tab-today">
+    <div class="app-header">
+      <h2>Today's Doses</h2>
+      <button class="icon-btn" onclick="showScreen('landing')">← Exit</button>
+    </div>
+    <div id="permBar" class="perm-bar" onclick="requestNotifPermission()" style="display:none;">
+      <span>🔔</span><span>Tap to enable medication reminders</span><span>›</span>
+    </div>
+    <div class="summary-bar" id="summaryBar"></div>
+    <div class="date-strip" id="todayDate"></div>
+    <div class="doses-container" id="dosesContainer"></div>
+  </div>
+
+  <div id="tab-setup" style="display:none;">
+    <div class="app-header" style="margin-bottom:8px;"><h2>Setup</h2></div>
+    <div class="setup-form">
+      <div class="form-section">
+        <h3>💊 Medication Details</h3>
+        <div class="form-row">
+          <label>Medication Name</label>
+          <input type="text" id="medName" placeholder="e.g. Metformin 500mg">
+        </div>
+        <div class="form-row">
+          <label>Dosage per intake</label>
+          <input type="text" id="medDose" placeholder="e.g. 1 tablet">
+        </div>
+        <div class="form-row">
+          <label>Additional notes</label>
+          <input type="text" id="medNotes" placeholder="e.g. take with food">
+        </div>
+      </div>
+      <div class="form-section">
+        <h3>⏰ Reminder Times (4 daily)</h3>
+        <div class="time-grid">
+          <div class="form-row"><label>Dose 1 — Morning</label><input type="time" id="time1" value="08:00"></div>
+          <div class="form-row"><label>Dose 2 — Noon</label><input type="time" id="time2" value="12:00"></div>
+          <div class="form-row"><label>Dose 3 — Afternoon</label><input type="time" id="time3" value="17:00"></div>
+          <div class="form-row"><label>Dose 4 — Night</label><input type="time" id="time4" value="21:00"></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <h3>🔗 Partner Link</h3>
+        <p style="font-size:0.82rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">Share this ID with your partner so they can monitor your doses on the same device or browser.</p>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;font-family:monospace;font-size:0.9rem;letter-spacing:0.1em;color:var(--accent);margin-bottom:12px;" id="partnerCode"></div>
+        <button class="btn-secondary" style="width:100%;padding:12px;" onclick="copyPartnerCode()">📋 Copy Partner ID</button>
+      </div>
+      <button class="save-btn" onclick="saveSetup()">Save & Apply</button>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <button class="nav-btn active" id="nav-today" onclick="switchTab('today')">
+      <span class="nav-icon">💊</span><span>Today</span>
+    </button>
+    <button class="nav-btn" id="nav-setup" onclick="switchTab('setup')">
+      <span class="nav-icon">⚙️</span><span>Setup</span>
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════ PARTNER APP ═══════════════ -->
+<div class="screen" id="partnerApp">
+  <div class="partner-header">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <h2>Partner Monitor</h2>
+        <p id="partnerPatientName">Monitoring medication adherence</p>
+      </div>
+      <button class="icon-btn" onclick="showScreen('landing')">← Exit</button>
+    </div>
+  </div>
+  <div id="partnerPermBar" class="perm-bar" onclick="requestNotifPermission()" style="display:none;margin-bottom:8px;">
+    <span>🔔</span><span>Enable notifications to get alerts</span><span>›</span>
+  </div>
+  <div id="partnerConnect" style="padding:20px;">
+    <div class="form-section">
+      <h3>🔗 Connect to Patient</h3>
+      <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5;">Enter the Partner ID shared by the person you're monitoring.</p>
+      <div class="form-row">
+        <label>Partner ID</label>
+        <input type="text" id="connectCode" placeholder="e.g. ABC-123" style="text-transform:uppercase;">
+      </div>
+      <button class="save-btn" onclick="connectToPatient()">Connect</button>
+    </div>
+    <div id="partnerConnected" style="display:none;">
+      <div class="form-section" style="margin-top:16px;">
+        <h3 style="color:var(--success);">✅ Connected</h3>
+        <p style="font-size:0.82rem;color:var(--muted);">You are monitoring doses. Scroll down to see today's status.</p>
+      </div>
+    </div>
+  </div>
+  <div class="summary-bar" id="partnerSummary" style="display:none;"></div>
+  <div class="date-strip" id="partnerDateStrip" style="display:none;"></div>
+  <div class="partner-log" id="partnerLog"></div>
+  <div class="bottom-nav">
+    <button class="nav-btn active"><span class="nav-icon">👁️</span><span>Monitor</span></button>
+  </div>
+</div>
+
+<!-- ═══════════════ PHOTO MODAL ═══════════════ -->
+<div class="modal-overlay" id="photoModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3>📸 Photo Proof</h3>
+    <p>Take a photo or upload one showing you took your medication.</p>
+    <img class="photo-preview" id="photoPreview" alt="Proof photo">
+    <div class="photo-placeholder" id="photoPlaceholder" onclick="document.getElementById('photoInput').click()">
+      <span>📷</span><span>Tap to take / upload photo</span>
+    </div>
+    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(event)">
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" id="confirmBtn" onclick="confirmDose()" disabled>✓ Mark as Taken</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════
+//  PWA: SERVICE WORKER + INSTALL PROMPT
+// ══════════════════════════════════════
+let deferredInstallPrompt = null;
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => {
+        console.log('SW registered:', reg.scope);
+        // Request periodic background sync if supported
+        if ('periodicSync' in reg) {
+          reg.periodicSync.register('medcare-reminder-check', { minInterval: 60 * 1000 })
+            .catch(() => {/* not supported, silent */});
+        }
+      })
+      .catch(err => console.warn('SW failed:', err));
+  });
+}
+
+// Capture install prompt
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Show after short delay
+  setTimeout(() => {
+    const dismissed = localStorage.getItem('install_dismissed');
+    if (!dismissed) showInstallPrompt();
+  }, 3000);
+});
+
+window.addEventListener('appinstalled', () => {
+  hideInstallPrompt();
+  showBanner('🎉', 'App Installed!', 'MedCare is now on your home screen.');
+  deferredInstallPrompt = null;
+});
+
+function showInstallPrompt() {
+  document.getElementById('installPrompt').classList.add('show');
+}
+
+function hideInstallPrompt() {
+  document.getElementById('installPrompt').classList.remove('show');
+}
+
+function installPWA() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.then(choice => {
+    if (choice.outcome === 'accepted') hideInstallPrompt();
+    deferredInstallPrompt = null;
+  });
+}
+
+function dismissInstall() {
+  hideInstallPrompt();
+  localStorage.setItem('install_dismissed', '1');
+}
+
+// ─── OFFLINE / ONLINE ───
+window.addEventListener('online',  () => { document.getElementById('offlineBanner').style.display = 'none'; });
+window.addEventListener('offline', () => { document.getElementById('offlineBanner').style.display = 'block'; });
+
+// ══════════════════════════════════════
+//  STATE & STORAGE
+// ══════════════════════════════════════
+let currentRole = null;
+let currentDoseIndex = null;
+let currentPhotoData = null;
+let checkInterval = null;
+
+function getState() { return JSON.parse(localStorage.getItem('medcare_state') || '{}'); }
+function setState(u) { const s = getState(); Object.assign(s, u); localStorage.setItem('medcare_state', JSON.stringify(s)); }
+function getTodayKey() { return new Date().toISOString().split('T')[0]; }
+
+function getDoses() {
+  const s = getState();
+  const today = getTodayKey();
+  if (!s.doseLog) s.doseLog = {};
+  if (!s.doseLog[today]) {
+    const times = s.times || ['08:00','12:00','17:00','21:00'];
+    s.doseLog[today] = times.map((t, i) => ({
+      index: i, time: t,
+      label: ['Morning','Noon','Afternoon','Night'][i],
+      status: 'pending', photo: null, takenAt: null
+    }));
+    localStorage.setItem('medcare_state', JSON.stringify(s));
+  }
+  return s.doseLog[today];
+}
+
+function saveDose(index, updates) {
+  const s = getState();
+  const today = getTodayKey();
+  if (s.doseLog && s.doseLog[today]) {
+    Object.assign(s.doseLog[today][index], updates);
+    localStorage.setItem('medcare_state', JSON.stringify(s));
+  }
+}
+
+// ══════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function enterAs(role) {
+  currentRole = role;
+  localStorage.setItem('medcare_role', role);
+  if (role === 'patient') { showScreen('patientApp'); initPatient(); }
+  else { showScreen('partnerApp'); initPartner(); }
+}
+
+function switchTab(tab) {
+  document.getElementById('tab-today').style.display = tab === 'today' ? 'block' : 'none';
+  document.getElementById('tab-setup').style.display = tab === 'setup' ? 'block' : 'none';
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('nav-' + tab).classList.add('active');
+  if (tab === 'today') renderDoses();
+  if (tab === 'setup') loadSetupForm();
+}
+
+// ══════════════════════════════════════
+//  NOTIFICATIONS
+// ══════════════════════════════════════
+function requestNotifPermission() {
+  if (!('Notification' in window)) { showBanner('⚠️', 'Not supported', 'Notifications not available on this browser.'); return; }
+  Notification.requestPermission().then(p => {
+    if (p === 'granted') {
+      document.getElementById('permBar').style.display = 'none';
+      document.getElementById('partnerPermBar').style.display = 'none';
+      showBanner('🔔', 'Notifications enabled!', "You'll be reminded at each dose time.");
+      scheduleRemindersInSW();
+    } else {
+      showBanner('⚠️', 'Permission denied', 'Enable notifications in your browser settings.');
+    }
+  });
+}
+
+function checkNotifPermission() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    document.getElementById('permBar').style.display = 'flex';
+    document.getElementById('partnerPermBar').style.display = 'flex';
+  }
+}
+
+function sendNotif(title, body, icon = '💊') {
+  showBanner(icon, title, body);
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, {
+      body,
+      icon: 'icons/icon-192x192.png',
+      badge: 'icons/icon-72x72.png',
+      vibrate: [200, 100, 200]
+    });
+  }
+}
+
+function showBanner(icon, title, body) {
+  const b = document.getElementById('notifBanner');
+  document.getElementById('notifIcon').textContent = icon;
+  document.getElementById('notifTitle').textContent = title;
+  document.getElementById('notifBody').textContent = body;
+  b.classList.add('show');
+  clearTimeout(b._t);
+  b._t = setTimeout(() => b.classList.remove('show'), 4000);
+}
+
+function scheduleRemindersInSW() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.ready.then(reg => {
+    if (reg.active) {
+      const s = getState();
+      const doses = getDoses();
+      reg.active.postMessage({ type: 'SCHEDULE_REMINDERS', doses, medName: s.medName || 'Medication' });
+    }
+  });
+}
+
+// ══════════════════════════════════════
+//  PATIENT
+// ══════════════════════════════════════
+function initPatient() {
+  checkNotifPermission();
+  loadSetupDefaults();
+  renderTodayDate();
+  renderDoses();
+  startReminderCheck();
+  scheduleRemindersInSW();
+}
+
+function loadSetupDefaults() {
+  const s = getState();
+  if (!s.patientId) {
+    const id = Math.random().toString(36).substr(2,3).toUpperCase() + '-' + Math.random().toString(36).substr(2,3).toUpperCase();
+    setState({ patientId: id });
+  }
+}
+
+function renderTodayDate() {
+  document.getElementById('todayDate').textContent = new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
+}
+
+function renderDoses() {
+  const doses = getDoses();
+  const s = getState();
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  doses.forEach((d, i) => {
+    if (d.status === 'pending') {
+      const [h, m] = d.time.split(':').map(Number);
+      if (nowMins > h*60+m+60) { saveDose(i, { status: 'missed' }); doses[i].status = 'missed'; }
+    }
+  });
+
+  const done = doses.filter(d => d.status === 'done').length;
+  const missed = doses.filter(d => d.status === 'missed').length;
+  const pending = doses.filter(d => d.status === 'pending').length;
+
+  document.getElementById('summaryBar').innerHTML = `
+    <div class="summary-chip chip-done"><div class="num">${done}</div><div class="lbl">Taken</div></div>
+    <div class="summary-chip chip-missed"><div class="num">${missed}</div><div class="lbl">Missed</div></div>
+    <div class="summary-chip chip-pending"><div class="num">${pending}</div><div class="lbl">Pending</div></div>
+  `;
+
+  const container = document.getElementById('dosesContainer');
+  if (!s.medName) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚙️</div><h3>No medication set up yet</h3><p>Go to the Setup tab to add your medication details and reminder times.</p></div>`;
+    return;
+  }
+
+  container.innerHTML = '';
+  doses.forEach((dose, i) => {
+    const [h, m] = dose.time.split(':').map(Number);
+    const doseMins = h*60+m;
+    let cardClass = 'upcoming', badgeClass = 'badge-upcoming', badgeText = 'Upcoming';
+    if (dose.status === 'done') { cardClass = 'done'; badgeClass = 'badge-done'; badgeText = '✓ Taken'; }
+    else if (dose.status === 'missed') { cardClass = 'missed'; badgeClass = 'badge-missed'; badgeText = '✗ Missed'; }
+    else if (Math.abs(nowMins - doseMins) <= 60) { cardClass = 'current'; badgeClass = 'badge-current'; badgeText = '⏰ Now'; }
+
+    const displayTime = new Date(2000,0,1,h,m).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    const card = document.createElement('div');
+    card.className = `dose-card ${cardClass}`;
+    card.style.animationDelay = `${i * 0.08}s`;
+    card.innerHTML = `
+      <div class="dose-header">
+        <div><div class="dose-time">${displayTime}</div><div class="dose-label">${dose.label} dose</div></div>
+        <div class="status-badge ${badgeClass}">${badgeText}</div>
+      </div>
+      <div class="med-name">${s.medName}</div>
+      <div class="med-dose-info">${s.medDose || ''}${s.medNotes ? ' · ' + s.medNotes : ''}</div>
+      ${dose.photo ? `<img class="proof-thumb" src="${dose.photo}" alt="Proof">` : ''}
+      ${dose.takenAt ? `<div style="font-size:0.75rem;color:var(--muted);margin-top:8px;">Taken at ${new Date(dose.takenAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+      ${dose.status === 'pending' ? `<button class="done-btn" onclick="openPhotoModal(${i})">📷 Mark as Taken</button>` : ''}
+    `;
+    container.appendChild(card);
+  });
+}
+
+function startReminderCheck() {
+  if (checkInterval) clearInterval(checkInterval);
+  checkInterval = setInterval(() => {
+    if (currentRole !== 'patient') return;
+    const s = getState();
+    const doses = getDoses();
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    doses.forEach((d) => {
+      if (d.status !== 'pending') return;
+      const [h, m] = d.time.split(':').map(Number);
+      if (nowMins === h*60+m) sendNotif('💊 Medication Time', `Time for your ${d.label.toLowerCase()} dose! (${s.medName || 'Medication'})`, '💊');
+    });
+    renderDoses();
+  }, 30000);
+}
+
+// ══════════════════════════════════════
+//  SETUP
+// ══════════════════════════════════════
+function loadSetupForm() {
+  const s = getState();
+  document.getElementById('medName').value = s.medName || '';
+  document.getElementById('medDose').value = s.medDose || '';
+  document.getElementById('medNotes').value = s.medNotes || '';
+  const t = s.times || ['08:00','12:00','17:00','21:00'];
+  ['time1','time2','time3','time4'].forEach((id,i) => document.getElementById(id).value = t[i]);
+  document.getElementById('partnerCode').textContent = s.patientId || '—';
+}
+
+function saveSetup() {
+  const times = ['time1','time2','time3','time4'].map(id => document.getElementById(id).value);
+  setState({ medName: document.getElementById('medName').value, medDose: document.getElementById('medDose').value, medNotes: document.getElementById('medNotes').value, times });
+  const s = getState();
+  const today = getTodayKey();
+  if (s.doseLog) { delete s.doseLog[today]; localStorage.setItem('medcare_state', JSON.stringify(s)); }
+  scheduleRemindersInSW();
+  showBanner('✅', 'Setup saved!', 'Your medication schedule has been updated.');
+  setTimeout(() => switchTab('today'), 1000);
+}
+
+function copyPartnerCode() {
+  const s = getState();
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(s.patientId || '').then(() => showBanner('📋', 'Copied!', 'Share this ID with your partner.'));
+  }
+}
+
+// ══════════════════════════════════════
+//  PHOTO MODAL
+// ══════════════════════════════════════
+function openPhotoModal(index) {
+  currentDoseIndex = index; currentPhotoData = null;
+  document.getElementById('photoPreview').style.display = 'none';
+  document.getElementById('photoPlaceholder').style.display = 'flex';
+  document.getElementById('confirmBtn').disabled = true;
+  document.getElementById('photoModal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('photoModal').classList.remove('open');
+  currentDoseIndex = null; currentPhotoData = null;
+}
+
+function handlePhoto(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    currentPhotoData = ev.target.result;
+    const p = document.getElementById('photoPreview');
+    p.src = currentPhotoData; p.style.display = 'block';
+    document.getElementById('photoPlaceholder').style.display = 'none';
+    document.getElementById('confirmBtn').disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+function confirmDose() {
+  if (currentDoseIndex === null || !currentPhotoData) return;
+  const now = new Date().toISOString();
+  saveDose(currentDoseIndex, { status: 'done', photo: currentPhotoData, takenAt: now });
+  closeModal();
+  const s = getState();
+  const dose = getDoses()[currentDoseIndex];
+  sendNotif('✅ Dose Logged', `${s.medName || 'Medication'} ${dose.label.toLowerCase()} dose marked as taken.`, '✅');
+  notifyPartner(currentDoseIndex);
+  // Tell SW to show partner notification
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready.then(reg => {
+      if (reg.active) reg.active.postMessage({ type: 'DOSE_TAKEN', label: dose.label, medName: s.medName || 'Medication' });
+    });
+  }
+  renderDoses();
+  document.getElementById('photoInput').value = '';
+}
+
+function notifyPartner(doseIndex) {
+  const doses = getDoses(); const s = getState(); const dose = doses[doseIndex];
+  const notifs = JSON.parse(localStorage.getItem('medcare_partner_notifs') || '[]');
+  notifs.unshift({ time: new Date().toISOString(), message: `✅ ${s.medName || 'Medication'} taken — ${dose.label} dose`, photo: dose.photo, type: 'taken' });
+  localStorage.setItem('medcare_partner_notifs', JSON.stringify(notifs.slice(0,50)));
+}
+
+// ══════════════════════════════════════
+//  PARTNER VIEW
+// ══════════════════════════════════════
+function initPartner() {
+  checkNotifPermission();
+  const s = getState();
+  if (s.partnerConnected) { document.getElementById('partnerConnected').style.display = 'block'; renderPartnerView(); }
+}
+
+function connectToPatient() {
+  const code = document.getElementById('connectCode').value.trim().toUpperCase();
+  if (!code) return;
+  setState({ partnerConnected: true, connectedPatientId: code });
+  document.getElementById('partnerConnected').style.display = 'block';
+  showBanner('🫶', 'Connected!', 'You are now monitoring their medication.');
+  renderPartnerView();
+}
+
+function renderPartnerView() {
+  const doses = getDoses(); const s = getState();
+  const done = doses.filter(d => d.status === 'done').length;
+  const missed = doses.filter(d => d.status === 'missed').length;
+  const pending = doses.filter(d => d.status === 'pending').length;
+
+  const sumEl = document.getElementById('partnerSummary');
+  sumEl.style.display = 'flex';
+  sumEl.innerHTML = `
+    <div class="summary-chip chip-done"><div class="num">${done}</div><div class="lbl">Taken</div></div>
+    <div class="summary-chip chip-missed"><div class="num">${missed}</div><div class="lbl">Missed</div></div>
+    <div class="summary-chip chip-pending"><div class="num">${pending}</div><div class="lbl">Pending</div></div>
+  `;
+
+  const dateEl = document.getElementById('partnerDateStrip');
+  dateEl.style.display = 'block';
+  dateEl.textContent = new Date().toLocaleDateString(undefined, {weekday:'long',month:'long',day:'numeric'});
+  document.getElementById('partnerPatientName').textContent = `Monitoring: ${s.medName || 'Medication'} · ${s.connectedPatientId || ''}`;
+
+  const log = document.getElementById('partnerLog');
+  log.innerHTML = '';
+  doses.forEach((dose, i) => {
+    const [h, m] = dose.time.split(':').map(Number);
+    const displayTime = new Date(2000,0,1,h,m).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    let iconClass = 'pending', emoji = '⏳';
+    if (dose.status === 'done') { iconClass = 'done'; emoji = '✅'; }
+    if (dose.status === 'missed') { iconClass = 'missed'; emoji = '❌'; }
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.style.animationDelay = `${i*0.07}s`;
+    entry.innerHTML = `
+      <div class="log-icon ${iconClass}">${emoji}</div>
+      <div class="log-body">
+        <div class="log-title">${dose.label} Dose — ${displayTime}</div>
+        <div class="log-meta">${dose.status === 'done' ? `Taken at ${new Date(dose.takenAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · Photo proof attached` : dose.status === 'missed' ? 'Not taken' : 'Pending'}</div>
+        ${dose.photo ? `<img class="log-proof" src="${dose.photo}" alt="Proof">` : ''}
+      </div>
+    `;
+    log.appendChild(entry);
+  });
+
+  const notifs = JSON.parse(localStorage.getItem('medcare_partner_notifs') || '[]');
+  if (notifs.length > 0) {
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'padding:12px 0 4px;font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;';
+    hdr.textContent = 'Recent Activity';
+    log.appendChild(hdr);
+    notifs.slice(0,5).forEach(n => {
+      const el = document.createElement('div');
+      el.className = 'log-entry';
+      el.innerHTML = `<div class="log-icon done">🔔</div><div class="log-body"><div class="log-title">${n.message}</div><div class="log-meta">${new Date(n.time).toLocaleString()}</div></div>`;
+      log.appendChild(el);
+    });
+  }
+}
+
+setInterval(() => { if (currentRole === 'partner') renderPartnerView(); }, 10000);
+
+// ══════════════════════════════════════
+//  INIT — restore session
+// ══════════════════════════════════════
+window.addEventListener('load', () => {
+  if (!navigator.onLine) document.getElementById('offlineBanner').style.display = 'block';
+  // Restore last role on reopen
+  const savedRole = localStorage.getItem('medcare_role');
+  if (savedRole) enterAs(savedRole);
+});
+</script>
+</body>
+</html>
