@@ -12,6 +12,200 @@
 <title>MediTrack</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
+<!-- ╔══════════════════════════════════════════════════════╗
+     ║  FIREBASE SETUP — replace these 6 values with your  ║
+     ║  project's config from Firebase Console >            ║
+     ║  Project Settings > Your apps > SDK setup            ║
+     ╚══════════════════════════════════════════════════════╝ -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc, collection, addDoc,
+           onSnapshot, query, where, orderBy, serverTimestamp }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey:            "AIzaSyCYFqP6QPPmW9o_BVm1QAiVws9Ssd_XFtY",
+    authDomain:        "meditrack-16cc6.firebaseapp.com",
+    projectId:         "meditrack-16cc6",
+    storageBucket:     "meditrack-16cc6.firebasestorage.app",
+    messagingSenderId: "570450615587",
+    appId:             "1:570450615587:web:46cdee5ed1cd3283e4c096"
+  };
+
+  const fbApp    = initializeApp(firebaseConfig);
+  const auth     = getAuth(fbApp);
+  const db       = getFirestore(fbApp);
+  const provider = new GoogleAuthProvider();
+  window._fbAuth = auth; // expose for non-module onclick handlers
+
+  // ── Firestore helpers (shared across functions) ────────────
+  let unsubDoses = null; // live listener handle
+
+  async function saveUserProfile(user) {
+    const ref = doc(db, 'users', user.uid);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      await setDoc(ref, {
+        displayName: user.displayName || '',
+        email: user.email,
+        photoURL: user.photoURL || '',
+        createdAt: serverTimestamp()
+      });
+    }
+  }
+
+  async function logDose(uid, medicationName, dosage, notes, timeTaken) {
+    const today = new Date().toISOString().split("T")[0];
+    await addDoc(collection(db, 'doses'), {
+      uid,
+      medicationName,
+      dosage,
+      notes: notes || '',
+      timeTaken,
+      date: today,
+      status: 'taken',
+      createdAt: serverTimestamp()
+    });
+  }
+  window._logDose = logDose;
+
+  function subscribeTodaysDoses(uid, callback) {
+    const today = new Date().toISOString().split("T")[0];
+    const q = query(
+      collection(db, 'doses'),
+      where('uid', '==', uid),
+      where('date', '==', today)
+    );
+    if (unsubDoses) unsubDoses();
+    unsubDoses = onSnapshot(q, snap => {
+      const doses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      callback(doses);
+    });
+    return () => { if (unsubDoses) unsubDoses(); };
+  }
+
+  async function saveSettings(uid, data) {
+    await setDoc(doc(db, 'settings', uid), data, { merge: true });
+  }
+  window._saveSettings = saveSettings;
+
+  async function loadSettings(uid) {
+    const snap = await getDoc(doc(db, 'settings', uid));
+    return snap.exists() ? snap.data() : null;
+  }
+  window._loadSettings = loadSettings;
+
+  // ── Auth state listener ──────────────────────────────────
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      // Populate UI with real name / email / photo
+      const displayName = user.displayName || user.email.split('@')[0];
+      const email       = user.email;
+      const initials    = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2);
+      const photoURL    = user.photoURL;
+
+      // greeting
+      const greetingEl = document.querySelector('.greeting-name');
+      if (greetingEl) {
+        const parts = displayName.split(' ');
+        greetingEl.innerHTML = parts[0] + (parts[1] ? ` <em>${parts.slice(1).join(' ')}</em>` : '');
+      }
+      // header avatar
+      document.querySelectorAll('.avatar-sm').forEach(el => {
+        if (photoURL) {
+          el.style.backgroundImage = `url(${photoURL})`;
+          el.style.backgroundSize  = 'cover';
+          el.textContent = '';
+        } else {
+          el.textContent = initials;
+        }
+      });
+      // settings profile
+      const profAvatar = document.querySelector('.profile-avatar');
+      if (profAvatar) {
+        if (photoURL) {
+          profAvatar.style.backgroundImage = `url(${photoURL})`;
+          profAvatar.style.backgroundSize  = 'cover';
+          profAvatar.style.backgroundPosition = 'center';
+          profAvatar.textContent = '';
+        } else {
+          profAvatar.textContent = initials;
+        }
+      }
+      document.querySelectorAll('.profile-info h2').forEach(el => el.textContent = displayName);
+      document.querySelectorAll('.profile-info p').forEach(el  => el.textContent = email);
+
+      // Save user profile to Firestore on first login
+      saveUserProfile(user);
+
+      // Load saved settings and populate setup tab
+      loadSettings(user.uid).then(settings => {
+        if (!settings) return;
+        if (settings.medicationName) {
+          const inp = document.querySelector('#tab-setup input[placeholder="e.g. Metformin 500mg"]');
+          if (inp) inp.value = settings.medicationName;
+        }
+        if (settings.dosage) {
+          const inp = document.querySelector('#tab-setup input[placeholder="e.g. 1 tablet"]');
+          if (inp) inp.value = settings.dosage;
+        }
+        if (settings.times) {
+          const timeInputs = document.querySelectorAll('#tab-setup input[type="time"]');
+          settings.times.forEach((t,i) => { if (timeInputs[i]) timeInputs[i].value = t; });
+        }
+        if (settings.partnerCode) {
+          const codeEl = document.getElementById('partner-code');
+          if (codeEl) codeEl.textContent = settings.partnerCode;
+        } else {
+          // Auto-generate a partner code for new users
+          const newCode = 'MED-' + Math.random().toString(36).substr(2,4).toUpperCase();
+          const codeEl = document.getElementById('partner-code');
+          if (codeEl) codeEl.textContent = newCode;
+          saveSettings(user.uid, { partnerCode: newCode });
+        }
+      });
+
+      // Subscribe to today's doses and update the UI live
+      subscribeTodaysDoses(user.uid, doses => {
+        window._currentDoses = doses;
+        renderDoseProgress(doses);
+      });
+
+      // if user is already signed in, skip auth screen
+      if (document.getElementById('auth-screen').classList.contains('active')) {
+        showRoleSelect();
+      }
+    }
+  });
+
+  // ── Sign-in (called by onclick) ──────────────────────────
+  window.signInWithGoogle = async function() {
+    const btn = document.querySelector('.btn-google');
+    btn.disabled = true;
+    btn.innerHTML = `<span style="display:inline-block;width:18px;height:18px;border:2px solid #ccc;border-top-color:#555;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:8px"></span> Signing in…`;
+    try {
+      await signInWithPopup(auth, provider);
+      showRoleSelect();
+    } catch (err) {
+      console.error(err);
+      showToast('Sign-in failed: ' + (err.message || 'unknown error'));
+      btn.disabled = false;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Continue with Google`;
+    }
+  };
+
+  // ── Sign-out ─────────────────────────────────────────────
+  window.signOut = async function() {
+    await fbSignOut(auth);
+    document.getElementById('main-screen').classList.remove('active');
+    document.getElementById('auth-screen').classList.add('active');
+    switchTab('home');
+    showToast('Signed out successfully');
+  };
+</script>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   :root{
@@ -1221,7 +1415,7 @@
           </p>
         </div>
 
-        <button class="save-btn" onclick="showToast('Settings saved!','success')">Save Changes</button>
+        <button class="save-btn" onclick="handleSaveSettings()">Save Changes</button>
       </div><!-- /tab-setup -->
 
       <!-- MONITOR TAB -->
@@ -1399,7 +1593,7 @@
           <div class="input-label">Notes (optional)</div>
           <input type="text" class="input-field" placeholder="Any notes…"/>
         </div>
-        <button class="modal-cta" onclick="closeDoseModal();showToast('Dose logged ✓','success')">Log &amp; Upload Photo</button>
+        <button class="modal-cta" onclick="handleLogDose()">Log &amp; Upload Photo</button>
         <button style="width:100%;padding:.85rem;background:transparent;border:none;color:var(--ink-dim);font-family:var(--font-sans);font-size:.88rem;cursor:pointer;margin-top:.25rem" onclick="closeDoseModal()">Cancel</button>
       </div>
     </div>
@@ -1435,6 +1629,33 @@
 let currentTab = 'home';
 let currentUser = null;
 
+// ───── Dose progress renderer (called by Firestore live listener) ─────
+function renderDoseProgress(doses) {
+  const taken  = doses.filter(d => d.status === 'taken').length;
+  const total  = 4; // based on 4 daily reminder slots
+  const pct    = Math.round((taken / total) * 100);
+
+  // update ring
+  const ring = document.querySelector('.ring-progress');
+  if (ring) {
+    const circumference = 163;
+    ring.style.strokeDashoffset = circumference - (circumference * taken / total);
+  }
+  const ringText = document.querySelector('.ring-text');
+  if (ringText) ringText.textContent = taken + '/' + total;
+
+  // update stat chips
+  const chips = document.querySelectorAll('.stat-chip-val');
+  if (chips[0]) chips[0].textContent = taken;
+  if (chips[2]) chips[2].textContent = Math.max(0, total - taken - 1);
+
+  // update greeting stat
+  const ringH3 = document.querySelector('.ring-stats h3');
+  if (ringH3) ringH3.textContent = pct + '% done';
+  const ringP = document.querySelector('.ring-stats p');
+  if (ringP) ringP.textContent = taken + ' of ' + total + ' doses taken today';
+}
+
 function switchTab(tab) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -1448,19 +1669,7 @@ function switchTab(tab) {
   }
 }
 
-// ───── Auth flow ─────
-function signInWithGoogle() {
-  // Simulate loading state
-  const btn = document.querySelector('.btn-google');
-  btn.textContent = 'Signing in…';
-  btn.disabled = true;
-  setTimeout(() => {
-    btn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Continue with Google`;
-    btn.disabled = false;
-    showRoleSelect();
-  }, 1200);
-}
-
+// ───── Auth flow (signInWithGoogle + signOut defined in Firebase module above) ─────
 function showRoleSelect() {
   document.getElementById('auth-screen').classList.remove('active');
   document.getElementById('role-screen').classList.add('active');
@@ -1473,13 +1682,6 @@ function enterApp(role) {
   if (role === 'partner') {
     switchTab('monitor');
   }
-}
-
-function signOut() {
-  document.getElementById('main-screen').classList.remove('active');
-  document.getElementById('auth-screen').classList.add('active');
-  switchTab('home');
-  showToast('Signed out successfully');
 }
 
 // ───── Modals ─────
@@ -1517,6 +1719,88 @@ function showToast(msg, type) {
   t.className = 'toast show' + (type ? ' ' + type : '');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ───── Firestore action handlers ─────
+async function handleLogDose() {
+  const user = window._fbAuth ? window._fbAuth.currentUser : null;
+  if (!user) { showToast('Please sign in first'); return; }
+
+  const selects  = document.querySelectorAll('#dose-modal select');
+  const medName  = selects[0] ? selects[0].value : 'Medication';
+  const timeInp  = document.querySelector('#dose-modal input[type="time"]');
+  const notesInp = document.querySelector('#dose-modal input[type="text"]');
+  const timeTaken = timeInp ? timeInp.value : new Date().toTimeString().slice(0,5);
+  const notes    = notesInp ? notesInp.value : '';
+
+  try {
+    await window._logDose(user.uid, medName, '', notes, timeTaken);
+    closeDoseModal();
+    showToast('Dose logged ✓', 'success');
+  } catch (e) {
+    console.error(e);
+    showToast('Error saving dose: ' + e.message);
+  }
+}
+
+async function handleSaveSettings() {
+  const user = window._fbAuth ? window._fbAuth.currentUser : null;
+  if (!user) { showToast('Please sign in first'); return; }
+
+  const inputs   = document.querySelectorAll('#tab-setup input[type="text"]');
+  const timeInps = document.querySelectorAll('#tab-setup input[type="time"]');
+  const codeEl   = document.getElementById('partner-code');
+
+  const data = {
+    medicationName: inputs[0] ? inputs[0].value : '',
+    dosage:         inputs[1] ? inputs[1].value : '',
+    notes:          inputs[2] ? inputs[2].value : '',
+    times:          Array.from(timeInps).map(i => i.value),
+    partnerCode:    codeEl ? codeEl.textContent : '',
+    updatedAt:      new Date().toISOString()
+  };
+
+  try {
+    await window._saveSettings(user.uid, data);
+    showToast('Settings saved!', 'success');
+  } catch (e) {
+    console.error(e);
+    showToast('Error saving: ' + e.message);
+  }
+}
+
+// Make auth accessible from handlers
+window._fbAuth = null; // will be populated by Firebase module
+
+// ───── Service Worker registration ─────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('./sw.js');
+
+      // Listen for the new SW telling us it's ready
+      navigator.serviceWorker.addEventListener('message', event => {
+        if (event.data && event.data.type === 'SW_UPDATED') {
+          // Show a non-intrusive toast then reload to get the new version
+          showToast('App updated — reloading…', 'success');
+          setTimeout(() => window.location.reload(), 1500);
+        }
+      });
+
+      // Also handle the case where a new SW is waiting (e.g. user had app open)
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing;
+        newSW.addEventListener('statechange', () => {
+          if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+            // New SW installed but waiting — send it a skip message
+            newSW.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      });
+    } catch (err) {
+      console.error('SW registration failed:', err);
+    }
+  });
 }
 </script>
 </body>
