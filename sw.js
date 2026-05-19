@@ -7,7 +7,7 @@
 //  phone gets the update on next open — no stale app.
 // ─────────────────────────────────────────────────────────────────
 
-const CACHE_VERSION = 'meditrack-v3'; // ← bump this on every deploy
+const CACHE_VERSION = 'meditrack-v4'; // ← bump this on every deploy
 
 const ASSETS = [
   './',
