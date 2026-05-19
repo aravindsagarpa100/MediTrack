@@ -1,70 +1,698 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MediTrack</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a14">
+<meta name="description" content="Track medications, share photo proof with your partner, never miss a dose.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MediTrack">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="icons/icon-152x152.png">
+<link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
+<title>MediTrack — Medication Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a14; --surface: #12121f; --surface2: #1a1a2e; --border: #2a2a45;
+  --accent: #e8a87c; --accent2: #7c9ee8; --success: #7ce8a8; --danger: #e87c7c;
+  --text: #f0ede8; --muted: #8884a0;
+  --pill-glow: 0 0 20px rgba(232,168,124,0.3);
+  --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+html,body { height:100%; overscroll-behavior:none; }
+body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; min-height:-webkit-fill-available; overflow-x:hidden; padding-top:var(--safe-top); }
+body::before { content:''; position:fixed; inset:0; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E"); pointer-events:none; z-index:9999; opacity:0.4; }
 
-  <link rel="manifest" href="manifest.json" crossorigin="use-credentials" />
+.screen { display:none; min-height:100vh; }
+.screen.active { display:block; animation:fadeIn 0.4s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;} }
+@keyframes slideUp { from{opacity:0;transform:translateY(30px);}to{opacity:1;transform:none;} }
+@keyframes pulse { 0%,100%{opacity:1;}50%{opacity:0.5;} }
+@keyframes glow { 0%,100%{box-shadow:var(--pill-glow);}50%{box-shadow:0 0 40px rgba(232,168,124,0.5);} }
+@keyframes shimmer { 0%{transform:translateX(-100%);}100%{transform:translateX(100%);} }
+@keyframes spin { to{transform:rotate(360deg);} }
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #080d12;
-      color: white;
-      padding: 20px;
-    }
+#offlineBanner { position:fixed; top:var(--safe-top); left:0; right:0; background:var(--danger); color:#0a0a14; text-align:center; padding:8px; font-size:0.82rem; font-weight:600; z-index:4000; display:none; }
 
-    button {
-      padding: 12px;
-      margin: 10px 0;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-    }
+#syncStatus { position:fixed; top:calc(var(--safe-top)+8px); right:12px; z-index:3000; font-size:0.72rem; color:var(--muted); display:none; align-items:center; gap:5px; background:rgba(10,10,20,0.8); padding:4px 10px; border-radius:20px; border:1px solid var(--border); backdrop-filter:blur(10px); }
+#syncDot { width:7px; height:7px; border-radius:50%; background:var(--muted); transition:background 0.3s; }
+#syncDot.live { background:var(--success); box-shadow:0 0 6px var(--success); }
+#syncDot.syncing { background:var(--accent); animation:pulse 1s infinite; }
+#syncDot.error { background:var(--danger); }
 
-    .med-card {
-      background: #1a1f27;
-      padding: 10px;
-      margin-top: 15px;
-      border-radius: 10px;
-    }
+/* LOGIN */
+#loginScreen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:40px 24px; text-align:center; background:radial-gradient(ellipse 80% 60% at 50% 0%,#1e1a35 0%,transparent 70%); }
+.login-icon { width:90px; height:90px; background:linear-gradient(135deg,#e8a87c,#c87840); border-radius:28px; display:flex; align-items:center; justify-content:center; font-size:40px; margin-bottom:28px; box-shadow:0 8px 40px rgba(232,168,124,0.4); animation:glow 3s ease-in-out infinite; position:relative; overflow:hidden; }
+.login-icon::after { content:''; position:absolute; top:0; left:-100%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent); animation:shimmer 3s infinite; }
+#loginScreen h1 { font-family:'Playfair Display',serif; font-size:2.4rem; font-weight:700; background:linear-gradient(135deg,#f0ede8,#e8a87c); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:12px; }
+#loginScreen>p { color:var(--muted); font-size:1rem; line-height:1.6; max-width:300px; margin-bottom:48px; }
+.google-btn { display:flex; align-items:center; gap:12px; padding:14px 28px; background:var(--surface); border:1px solid var(--border); border-radius:16px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:1rem; font-weight:500; cursor:pointer; transition:all 0.25s ease; width:100%; max-width:300px; justify-content:center; }
+.google-btn:hover { border-color:var(--accent); background:var(--surface2); transform:translateY(-2px); box-shadow:0 8px 30px rgba(232,168,124,0.15); }
+.google-btn svg { width:22px; height:22px; flex-shrink:0; }
+.login-note { margin-top:20px; font-size:0.78rem; color:var(--muted); max-width:260px; line-height:1.5; }
 
-    img {
-      border-radius: 10px;
-    }
-  </style>
+/* USER BAR */
+.user-bar { display:flex; align-items:center; gap:10px; padding:10px 20px; background:var(--surface2); border-bottom:1px solid var(--border); }
+.user-avatar { width:32px; height:32px; border-radius:50%; border:2px solid var(--accent); object-fit:cover; background:var(--surface); }
+.user-name { font-size:0.82rem; color:var(--muted); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.signout-btn { background:none; border:1px solid var(--border); border-radius:8px; padding:4px 10px; font-size:0.75rem; color:var(--muted); cursor:pointer; font-family:'DM Sans',sans-serif; transition:all 0.2s; flex-shrink:0; }
+.signout-btn:hover { border-color:var(--danger); color:var(--danger); }
+
+/* ROLE SCREEN */
+#roleScreen { min-height:100vh; }
+.role-center { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 24px; text-align:center; }
+.role-center h2 { font-family:'Playfair Display',serif; font-size:1.8rem; margin-bottom:8px; background:linear-gradient(135deg,#f0ede8,#e8a87c); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.role-center>p { color:var(--muted); font-size:0.9rem; margin-bottom:36px; }
+.role-card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:20px 24px; cursor:pointer; transition:all 0.25s ease; display:flex; align-items:center; gap:16px; text-align:left; width:100%; max-width:340px; margin-bottom:14px; }
+.role-card:hover,.role-card:active { border-color:var(--accent); background:var(--surface2); transform:translateY(-2px); box-shadow:0 8px 30px rgba(232,168,124,0.15); }
+.role-card .icon { font-size:2rem; }
+.role-card .label { font-size:1.05rem; font-weight:500; }
+.role-card .sublabel { font-size:0.82rem; color:var(--muted); margin-top:2px; }
+
+/* APP HEADER */
+.app-header { padding:16px 20px 0; display:flex; align-items:center; justify-content:space-between; }
+.app-header h2 { font-family:'Playfair Display',serif; font-size:1.4rem; background:linear-gradient(135deg,#f0ede8,#e8a87c); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.icon-btn { background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:10px; padding:8px 14px; cursor:pointer; font-size:0.85rem; font-family:'DM Sans',sans-serif; transition:all 0.2s; }
+.icon-btn:hover { border-color:var(--accent); }
+
+.date-strip { padding:14px 20px 6px; font-size:0.82rem; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase; }
+
+.summary-bar { display:flex; gap:10px; padding:12px 20px 8px; }
+.summary-chip { flex:1; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px; text-align:center; }
+.summary-chip .num { font-family:'Playfair Display',serif; font-size:1.6rem; font-weight:700; }
+.summary-chip .lbl { font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; }
+.chip-done .num { color:var(--success); } .chip-missed .num { color:var(--danger); } .chip-pending .num { color:var(--accent2); }
+
+/* DOSE CARDS */
+.doses-container { padding:8px 20px 120px; }
+.dose-card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:18px 20px; margin-bottom:12px; transition:all 0.3s ease; animation:slideUp 0.4s ease both; position:relative; overflow:hidden; }
+.dose-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:4px 0 0 4px; background:var(--border); transition:background 0.3s; }
+.dose-card.done::before { background:var(--success); }
+.dose-card.missed::before { background:var(--danger); }
+.dose-card.upcoming::before { background:var(--accent2); }
+.dose-card.current::before { background:var(--accent); animation:pulse 2s infinite; }
+.dose-card.done { opacity:0.75; }
+.dose-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+.dose-time { font-family:'Playfair Display',serif; font-size:1.5rem; font-weight:700; }
+.dose-label { font-size:0.78rem; color:var(--muted); margin-top:2px; }
+.status-badge { padding:5px 12px; border-radius:20px; font-size:0.75rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; }
+.badge-done { background:rgba(124,232,168,0.15); color:var(--success); border:1px solid rgba(124,232,168,0.3); }
+.badge-missed { background:rgba(232,124,124,0.15); color:var(--danger); border:1px solid rgba(232,124,124,0.3); }
+.badge-upcoming { background:rgba(124,158,232,0.15); color:var(--accent2); border:1px solid rgba(124,158,232,0.3); }
+.badge-current { background:rgba(232,168,124,0.15); color:var(--accent); border:1px solid rgba(232,168,124,0.3); }
+.med-name { font-size:1rem; font-weight:500; margin-bottom:4px; }
+.med-dose-info { font-size:0.82rem; color:var(--muted); }
+.proof-thumb { width:100%; max-height:160px; object-fit:cover; border-radius:10px; margin-top:12px; border:1px solid var(--border); }
+.done-btn { width:100%; margin-top:14px; padding:13px; background:linear-gradient(135deg,#e8a87c,#c87840); border:none; border-radius:12px; color:#0a0a14; font-family:'DM Sans',sans-serif; font-size:0.95rem; font-weight:600; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:8px; }
+.done-btn:active { transform:scale(0.98); }
+
+/* SETUP */
+.setup-form { padding:20px 20px 120px; }
+.form-section { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:20px; margin-bottom:16px; }
+.form-section h3 { font-family:'Playfair Display',serif; font-size:1.1rem; margin-bottom:16px; color:var(--accent); }
+.form-row { margin-bottom:14px; }
+label { display:block; font-size:0.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px; }
+input[type="text"],input[type="time"] { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px 14px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:0.95rem; outline:none; transition:border-color 0.2s; -webkit-appearance:none; }
+input:focus { border-color:var(--accent); }
+.time-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.save-btn { width:100%; padding:15px; background:linear-gradient(135deg,#e8a87c,#c87840); border:none; border-radius:14px; color:#0a0a14; font-family:'DM Sans',sans-serif; font-size:1rem; font-weight:600; cursor:pointer; transition:all 0.2s; margin-top:8px; }
+.save-btn:active { transform:scale(0.98); }
+.save-btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+.code-box { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; font-family:monospace; font-size:1rem; letter-spacing:0.15em; color:var(--accent); margin-bottom:12px; text-align:center; word-break:break-all; }
+
+/* PHOTO MODAL */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1000; display:none; align-items:flex-end; justify-content:center; }
+.modal-overlay.open { display:flex; animation:fadeIn 0.2s ease; }
+.modal-sheet { background:var(--surface); border:1px solid var(--border); border-radius:24px 24px 0 0; padding:28px 24px calc(28px + var(--safe-bottom)); width:100%; max-width:500px; animation:slideUp 0.3s ease; }
+.modal-handle { width:36px; height:4px; background:var(--border); border-radius:2px; margin:0 auto 20px; }
+.modal-sheet h3 { font-family:'Playfair Display',serif; font-size:1.3rem; margin-bottom:8px; }
+.modal-sheet p { font-size:0.85rem; color:var(--muted); margin-bottom:20px; }
+.photo-preview { width:100%; height:200px; object-fit:cover; border-radius:14px; margin-bottom:16px; display:none; border:1px solid var(--border); }
+.photo-placeholder { width:100%; height:160px; background:var(--bg); border:2px dashed var(--border); border-radius:14px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--muted); font-size:0.85rem; margin-bottom:16px; cursor:pointer; transition:border-color 0.2s; gap:8px; }
+.photo-placeholder:hover { border-color:var(--accent); }
+.photo-placeholder span { font-size:2rem; }
+.modal-actions { display:flex; gap:10px; }
+.btn-secondary { flex:1; padding:13px; background:var(--bg); border:1px solid var(--border); border-radius:12px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:0.9rem; cursor:pointer; }
+.btn-primary { flex:2; padding:13px; background:linear-gradient(135deg,#e8a87c,#c87840); border:none; border-radius:12px; color:#0a0a14; font-family:'DM Sans',sans-serif; font-size:0.9rem; font-weight:600; cursor:pointer; }
+.btn-primary:disabled { opacity:0.4; cursor:not-allowed; }
+
+/* PARTNER */
+.partner-header { padding:16px 20px; background:linear-gradient(135deg,rgba(124,158,232,0.1),transparent); border-bottom:1px solid var(--border); }
+.partner-header h2 { font-family:'Playfair Display',serif; font-size:1.3rem; color:var(--accent2); margin-bottom:4px; }
+.partner-header p { font-size:0.82rem; color:var(--muted); }
+.log-entry { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px 18px; margin-bottom:10px; animation:slideUp 0.3s ease both; display:flex; gap:14px; align-items:flex-start; }
+.log-icon { width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; flex-shrink:0; }
+.log-icon.done { background:rgba(124,232,168,0.15); } .log-icon.missed { background:rgba(232,124,124,0.15); } .log-icon.pending { background:rgba(124,158,232,0.15); }
+.log-body { flex:1; }
+.log-title { font-size:0.95rem; font-weight:500; margin-bottom:3px; }
+.log-meta { font-size:0.78rem; color:var(--muted); }
+.log-proof { width:100%; border-radius:10px; margin-top:10px; border:1px solid var(--border); max-height:200px; object-fit:cover; }
+
+/* NOTIF BANNER */
+.notif-banner { position:fixed; top:var(--safe-top); left:0; right:0; z-index:2000; transform:translateY(-100%); transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1); padding:16px; }
+.notif-banner.show { transform:translateY(0); }
+.notif-inner { background:var(--surface2); border:1px solid var(--accent); border-radius:16px; padding:14px 18px; display:flex; align-items:center; gap:12px; box-shadow:0 8px 30px rgba(0,0,0,0.5),var(--pill-glow); max-width:500px; margin:0 auto; }
+.notif-icon { font-size:1.5rem; }
+.notif-text .title { font-size:0.9rem; font-weight:600; }
+.notif-text .body { font-size:0.78rem; color:var(--muted); margin-top:2px; }
+
+/* BOTTOM NAV */
+.bottom-nav { position:fixed; bottom:0; left:0; right:0; background:rgba(10,10,20,0.95); border-top:1px solid var(--border); display:flex; padding:10px 0 calc(10px + var(--safe-bottom)); z-index:100; backdrop-filter:blur(20px); }
+.nav-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; background:none; border:none; color:var(--muted); cursor:pointer; padding:6px 0; transition:color 0.2s; font-family:'DM Sans',sans-serif; font-size:0.7rem; }
+.nav-btn.active { color:var(--accent); }
+.nav-btn .nav-icon { font-size:1.3rem; }
+
+.realtime-badge { display:inline-flex; align-items:center; gap:5px; background:rgba(124,232,168,0.1); border:1px solid rgba(124,232,168,0.3); border-radius:20px; padding:4px 10px; font-size:0.72rem; color:var(--success); margin-bottom:10px; }
+.realtime-dot { width:6px; height:6px; border-radius:50%; background:var(--success); animation:pulse 2s infinite; }
+.empty-state { text-align:center; padding:60px 30px; color:var(--muted); }
+.empty-state .empty-icon { font-size:3rem; margin-bottom:16px; opacity:0.5; }
+.empty-state h3 { font-family:'Playfair Display',serif; font-size:1.2rem; color:var(--text); margin-bottom:8px; }
+.empty-state p { font-size:0.85rem; line-height:1.6; }
+</style>
 </head>
 <body>
 
+<div id="offlineBanner">📵 You're offline — app still works!</div>
+<div id="syncStatus">
+  <div id="syncDot"></div><span id="syncText">connecting…</span>
+</div>
+
+<div class="notif-banner" id="notifBanner">
+  <div class="notif-inner">
+    <div class="notif-icon" id="notifIcon">💊</div>
+    <div class="notif-text">
+      <div class="title" id="notifTitle">MediTrack</div>
+      <div class="body" id="notifBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div class="screen active" id="loginScreen">
+  <div class="login-icon">💊</div>
   <h1>MediTrack</h1>
-
-  <h2 id="profileName">Loading...</h2>
-  <h4 id="caregiverName">Loading...</h4>
-
-  <button id="loginBtn">Login with Google</button>
-
-  <input
-    type="file"
-    accept="image/*"
-    capture="environment"
-    id="photoInput"
-    hidden
-  />
-
-  <button id="takePhotoBtn">
-    Upload Proof Photo
+  <p>Track medications, share photo proof with your partner, and never miss a dose.</p>
+  <button class="google-btn" onclick="signInWithGoogle()">
+    <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+    Continue with Google
   </button>
+  <p class="login-note">🔒 Your data is private and secure. Only you and your caregiver can view your medication logs.</p>
+</div>
 
-  <div id="medicationList"></div>
+<!-- ROLE SELECT -->
+<div class="screen" id="roleScreen">
+  <div class="user-bar">
+    <img class="user-avatar" id="roleAvatar" src="" alt="">
+    <span class="user-name" id="roleUserName"></span>
+    <button class="signout-btn" onclick="signOut()">Sign out</button>
+  </div>
+  <div class="role-center">
+    <h2>How are you using MediTrack?</h2>
+    <p>Choose your role to get started</p>
+    <div class="role-card" onclick="enterAs('patient')">
+      <span class="icon">👩‍⚕️</span>
+      <div><div class="label">I'm taking medication</div><div class="sublabel">Log doses & upload photo proof</div></div>
+    </div>
+    <div class="role-card" onclick="enterAs('partner')">
+      <span class="icon">🫶</span>
+      <div><div class="label">I'm the partner / caregiver</div><div class="sublabel">Monitor in real-time</div></div>
+    </div>
+  </div>
+</div>
 
-  <script type="module" src="app.js"></script>
+<!-- PATIENT APP -->
+<div class="screen" id="patientApp">
+  <div class="user-bar">
+    <img class="user-avatar" id="patientAvatar" src="" alt="">
+    <span class="user-name" id="patientUserName"></span>
+    <button class="signout-btn" onclick="signOut()">Sign out</button>
+  </div>
+  <div id="tab-today">
+    <div class="app-header"><h2>Today's Doses</h2></div>
+    <div class="summary-bar" id="summaryBar"></div>
+    <div class="date-strip" id="todayDate"></div>
+    <div class="doses-container" id="dosesContainer"></div>
+  </div>
+  <div id="tab-setup" style="display:none;">
+    <div class="app-header" style="margin-bottom:8px;"><h2>Setup</h2></div>
+    <div class="setup-form">
+      <div class="form-section">
+        <h3>💊 Medication Details</h3>
+        <div class="form-row"><label>Medication Name</label><input type="text" id="medName" placeholder="e.g. Metformin 500mg"></div>
+        <div class="form-row"><label>Dosage per intake</label><input type="text" id="medDose" placeholder="e.g. 1 tablet"></div>
+        <div class="form-row"><label>Additional notes</label><input type="text" id="medNotes" placeholder="e.g. take with food"></div>
+      </div>
+      <div class="form-section">
+        <h3>⏰ Reminder Times (4 daily)</h3>
+        <div class="time-grid">
+          <div class="form-row"><label>Morning</label><input type="time" id="time1" value="08:00"></div>
+          <div class="form-row"><label>Noon</label><input type="time" id="time2" value="12:00"></div>
+          <div class="form-row"><label>Afternoon</label><input type="time" id="time3" value="17:00"></div>
+          <div class="form-row"><label>Night</label><input type="time" id="time4" value="21:00"></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <h3>🔗 Partner Link</h3>
+        <p style="font-size:0.82rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">Share this code with your caregiver so they can monitor your doses <strong style="color:var(--success)">in real-time</strong>.</p>
+        <div class="code-box" id="partnerCode">—</div>
+        <button class="btn-secondary" style="width:100%;padding:12px;" onclick="copyPartnerCode()">📋 Copy Partner Code</button>
+      </div>
+      <button class="save-btn" id="saveBtn" onclick="saveSetup()">Save & Apply</button>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <button class="nav-btn active" id="nav-today" onclick="switchTab('today')"><span class="nav-icon">💊</span><span>Today</span></button>
+    <button class="nav-btn" id="nav-setup" onclick="switchTab('setup')"><span class="nav-icon">⚙️</span><span>Setup</span></button>
+  </div>
+</div>
 
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js');
+<!-- PARTNER APP -->
+<div class="screen" id="partnerApp">
+  <div class="user-bar">
+    <img class="user-avatar" id="partnerAvatar" src="" alt="">
+    <span class="user-name" id="partnerUserName"></span>
+    <button class="signout-btn" onclick="signOut()">Sign out</button>
+  </div>
+  <div class="partner-header">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div><h2>Partner Monitor</h2><p id="partnerPatientName">Connect to start monitoring</p></div>
+      <button class="icon-btn" onclick="disconnectPartner()">Change</button>
+    </div>
+  </div>
+  <div id="partnerConnect" style="padding:20px;">
+    <div class="form-section">
+      <h3>🔗 Connect to Patient</h3>
+      <p style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5;">Enter the Partner Code shared by the person you're monitoring. Doses update live — no refresh needed.</p>
+      <div class="form-row"><label>Partner Code</label><input type="text" id="connectCode" placeholder="e.g. ABC-123" style="text-transform:uppercase;letter-spacing:0.1em;"></div>
+      <button class="save-btn" onclick="connectToPatient()">Connect & Monitor</button>
+    </div>
+  </div>
+  <div id="partnerMonitor" style="display:none;padding:12px 20px 0;">
+    <div class="realtime-badge"><div class="realtime-dot"></div> Live sync active</div>
+    <div class="summary-bar" id="partnerSummary" style="padding:0 0 8px;"></div>
+    <div class="date-strip" id="partnerDateStrip" style="padding:0 0 8px;"></div>
+    <div id="partnerLog" style="padding-bottom:120px;"></div>
+  </div>
+  <div class="bottom-nav">
+    <button class="nav-btn active"><span class="nav-icon">👁️</span><span>Monitor</span></button>
+    <button class="nav-btn" onclick="disconnectPartner()"><span class="nav-icon">🔌</span><span>Change</span></button>
+  </div>
+</div>
+
+<!-- PHOTO MODAL -->
+<div class="modal-overlay" id="photoModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3>📸 Photo Proof</h3>
+    <p>Take or upload a photo showing you took your medication.</p>
+    <img class="photo-preview" id="photoPreview" alt="Proof">
+    <div class="photo-placeholder" id="photoPlaceholder" onclick="document.getElementById('photoInput').click()">
+      <span>📷</span><span>Tap to take / upload photo</span>
+    </div>
+    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(event)">
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" id="confirmBtn" onclick="confirmDose()" disabled>✓ Mark as Taken</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp }       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, query, where, getDocs }
+                               from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut as fbSignOut }
+                               from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCYFqP6QPPmW9o_BVm1QAiVws9Ssd_XFtY",
+  authDomain: "meditrack-16cc6.firebaseapp.com",
+  projectId: "meditrack-16cc6",
+  storageBucket: "meditrack-16cc6.firebasestorage.app",
+  messagingSenderId: "570450615587",
+  appId: "1:570450615587:web:46cdee5ed1cd3283e4c096"
+};
+
+const fbApp   = initializeApp(firebaseConfig);
+const db      = getFirestore(fbApp);
+const auth    = getAuth(fbApp);
+const gprov   = new GoogleAuthProvider();
+
+let currentUser       = null;
+let currentDoseIndex  = null;
+let currentPhotoData  = null;
+let unsubListener     = null;
+let patientDocId      = null;   // for patient: their own UID; for partner: connected patient UID
+
+// ─── helpers ───────────────────────────────────────────
+const getTodayKey = () => new Date().toISOString().split('T')[0];
+
+function setSyncStatus(state, text) {
+  const el = document.getElementById('syncStatus');
+  el.style.display = 'flex';
+  document.getElementById('syncDot').className = state;
+  document.getElementById('syncText').textContent = text;
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function showBanner(icon, title, body) {
+  document.getElementById('notifIcon').textContent  = icon;
+  document.getElementById('notifTitle').textContent = title;
+  document.getElementById('notifBody').textContent  = body;
+  const b = document.getElementById('notifBanner');
+  b.classList.add('show');
+  clearTimeout(b._t);
+  b._t = setTimeout(() => b.classList.remove('show'), 4000);
+}
+window.showBanner = showBanner;
+
+function generateCode() {
+  return Math.random().toString(36).substr(2,3).toUpperCase() + '-' +
+         Math.random().toString(36).substr(2,3).toUpperCase();
+}
+
+// ─── auth ──────────────────────────────────────────────
+window.signInWithGoogle = async () => {
+  try { await signInWithPopup(auth, gprov); }
+  catch(e) { showBanner('❌','Sign-in failed', e.message); }
+};
+
+window.signOut = async () => {
+  if (unsubListener) { unsubListener(); unsubListener = null; }
+  await fbSignOut(auth);
+};
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { currentUser = null; document.getElementById('syncStatus').style.display='none'; showScreen('loginScreen'); return; }
+  currentUser = user;
+  setSyncStatus('live','signed in');
+  fillUserUI(user);
+  const role = localStorage.getItem(`mcr_${user.uid}`);
+  if      (role === 'patient') { showScreen('patientApp'); await initPatient(); }
+  else if (role === 'partner') { showScreen('partnerApp'); await initPartnerUI(); }
+  else                         { showScreen('roleScreen'); }
+});
+
+function fillUserUI(u) {
+  ['roleAvatar','patientAvatar','partnerAvatar'].forEach(id => {
+    const el = document.getElementById(id);
+    if (u.photoURL) el.src = u.photoURL; else el.style.display='none';
+  });
+  const name = u.displayName || u.email || 'User';
+  ['roleUserName','patientUserName','partnerUserName'].forEach(id => document.getElementById(id).textContent = name);
+}
+
+// ─── role ──────────────────────────────────────────────
+window.enterAs = async role => {
+  localStorage.setItem(`mcr_${currentUser.uid}`, role);
+  if (role === 'patient') { showScreen('patientApp'); await initPatient(); }
+  else                    { showScreen('partnerApp'); await initPartnerUI(); }
+};
+
+window.switchTab = tab => {
+  document.getElementById('tab-today').style.display  = tab==='today'  ? 'block' : 'none';
+  document.getElementById('tab-setup').style.display  = tab==='setup'  ? 'block' : 'none';
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('nav-'+tab).classList.add('active');
+  if (tab==='today') renderDoses();
+  if (tab==='setup') loadSetupForm();
+};
+
+// ─── firestore helpers ─────────────────────────────────
+async function getPatDoc(id)          { const s = await getDoc(doc(db,'patients',id)); return s.exists() ? s.data() : null; }
+async function setPatDoc(id, data)    { setSyncStatus('syncing','saving…'); await setDoc(doc(db,'patients',id), data, {merge:true}); setSyncStatus('live','synced'); }
+function listenPatDoc(id, cb)         { return onSnapshot(doc(db,'patients',id), s => { if(s.exists()) cb(s.data()); }, e => { setSyncStatus('error','sync error'); console.error(e); }); }
+
+// ─── PATIENT ───────────────────────────────────────────
+async function initPatient() {
+  patientDocId = currentUser.uid;
+  setSyncStatus('syncing','loading…');
+
+  let data = await getPatDoc(patientDocId);
+  if (!data) {
+    data = {
+      uid: patientDocId, displayName: currentUser.displayName||'', email: currentUser.email||'',
+      medName:'', medDose:'', medNotes:'',
+      times:['08:00','12:00','17:00','21:00'],
+      partnerCode: generateCode(), doses:{}
+    };
+    await setPatDoc(patientDocId, data);
+  }
+
+  document.getElementById('todayDate').textContent =
+    new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+
+  await ensureTodayDoses(data);
+  await renderDoses();
+  setInterval(renderDoses, 60000);
+
+  if (unsubListener) unsubListener();
+  unsubListener = listenPatDoc(patientDocId, () => renderDoses());
+}
+
+async function ensureTodayDoses(data) {
+  const today = getTodayKey();
+  if (data.doses && data.doses[today]) return;
+  const times = data.times || ['08:00','12:00','17:00','21:00'];
+  const todayDoses = times.map((t,i) => ({
+    index:i, time:t, label:['Morning','Noon','Afternoon','Night'][i],
+    status:'pending', photo:null, takenAt:null
+  }));
+  await setPatDoc(patientDocId, { doses: {...(data.doses||{}), [today]: todayDoses } });
+}
+
+async function renderDoses() {
+  const data = await getPatDoc(patientDocId);
+  if (!data) return;
+  const today = getTodayKey();
+  const doses = (data.doses && data.doses[today]) || [];
+  const now   = new Date();
+  const nowM  = now.getHours()*60 + now.getMinutes();
+
+  let changed = false;
+  doses.forEach((d,i) => {
+    if (d.status==='pending') {
+      const [h,m] = d.time.split(':').map(Number);
+      if (nowM > h*60+m+60) { doses[i].status='missed'; changed=true; }
     }
-  </script>
+  });
+  if (changed) await setPatDoc(patientDocId, { doses:{...data.doses,[today]:doses} });
 
+  const done=doses.filter(d=>d.status==='done').length;
+  const missed=doses.filter(d=>d.status==='missed').length;
+  const pending=doses.filter(d=>d.status==='pending').length;
+
+  document.getElementById('summaryBar').innerHTML=`
+    <div class="summary-chip chip-done"><div class="num">${done}</div><div class="lbl">Taken</div></div>
+    <div class="summary-chip chip-missed"><div class="num">${missed}</div><div class="lbl">Missed</div></div>
+    <div class="summary-chip chip-pending"><div class="num">${pending}</div><div class="lbl">Pending</div></div>`;
+
+  const container = document.getElementById('dosesContainer');
+  if (!data.medName) {
+    container.innerHTML=`<div class="empty-state"><div class="empty-icon">⚙️</div><h3>No medication set up yet</h3><p>Go to the Setup tab to add your medication details.</p></div>`;
+    return;
+  }
+  container.innerHTML='';
+  doses.forEach((dose,i) => {
+    const [h,m]=dose.time.split(':').map(Number);
+    const doseM=h*60+m;
+    let cc='upcoming',bc='badge-upcoming',bt='Upcoming';
+    if (dose.status==='done')             { cc='done';    bc='badge-done';    bt='✓ Taken'; }
+    else if (dose.status==='missed')      { cc='missed';  bc='badge-missed';  bt='✗ Missed'; }
+    else if (Math.abs(nowM-doseM)<=60)   { cc='current'; bc='badge-current'; bt='⏰ Now'; }
+    const dt = new Date(2000,0,1,h,m).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const card=document.createElement('div');
+    card.className=`dose-card ${cc}`; card.style.animationDelay=`${i*0.08}s`;
+    card.innerHTML=`
+      <div class="dose-header">
+        <div><div class="dose-time">${dt}</div><div class="dose-label">${dose.label} dose</div></div>
+        <div class="status-badge ${bc}">${bt}</div>
+      </div>
+      <div class="med-name">${data.medName}</div>
+      <div class="med-dose-info">${data.medDose||''}${data.medNotes?' · '+data.medNotes:''}</div>
+      ${dose.photo?`<img class="proof-thumb" src="${dose.photo}" alt="Proof">`:''}
+      ${(dose.status==='pending'||dose.status==='current')?`<button class="done-btn" onclick="openPhotoModal(${i})">📸 Mark as Taken</button>`:''}
+      ${dose.status==='done'&&dose.takenAt?`<div style="font-size:0.75rem;color:var(--muted);margin-top:8px;">✓ Taken at ${new Date(dose.takenAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>`:''}`;
+    container.appendChild(card);
+  });
+}
+
+window.loadSetupForm = async () => {
+  const data = await getPatDoc(patientDocId);
+  if (!data) return;
+  document.getElementById('medName').value = data.medName||'';
+  document.getElementById('medDose').value = data.medDose||'';
+  document.getElementById('medNotes').value= data.medNotes||'';
+  const t = data.times||['08:00','12:00','17:00','21:00'];
+  [1,2,3,4].forEach(n => document.getElementById('time'+n).value=t[n-1]);
+  document.getElementById('partnerCode').textContent = data.partnerCode||'—';
+};
+
+window.saveSetup = async () => {
+  const btn=document.getElementById('saveBtn');
+  btn.disabled=true; btn.textContent='Saving…';
+  const medName  = document.getElementById('medName').value.trim();
+  const medDose  = document.getElementById('medDose').value.trim();
+  const medNotes = document.getElementById('medNotes').value.trim();
+  const times    = [1,2,3,4].map(n=>document.getElementById('time'+n).value);
+  const today    = getTodayKey();
+  const todayDoses = times.map((t,i)=>({index:i,time:t,label:['Morning','Noon','Afternoon','Night'][i],status:'pending',photo:null,takenAt:null}));
+  await setPatDoc(patientDocId,{medName,medDose,medNotes,times,doses:{[today]:todayDoses}});
+  btn.disabled=false; btn.textContent='Save & Apply';
+  showBanner('✅','Saved!','Settings synced. Caregiver will see the update.');
+  switchTab('today');
+};
+
+window.copyPartnerCode = async () => {
+  const data=await getPatDoc(patientDocId);
+  const code=(data&&data.partnerCode)||'—';
+  navigator.clipboard.writeText(code).then(()=>showBanner('📋','Copied!','Share this code with your caregiver.'));
+};
+
+// ─── PHOTO MODAL ───────────────────────────────────────
+window.openPhotoModal = i => {
+  currentDoseIndex=i; currentPhotoData=null;
+  document.getElementById('photoPreview').style.display='none';
+  document.getElementById('photoPlaceholder').style.display='flex';
+  document.getElementById('confirmBtn').disabled=true;
+  document.getElementById('photoInput').value='';
+  document.getElementById('photoModal').classList.add('open');
+};
+window.closeModal = () => document.getElementById('photoModal').classList.remove('open');
+
+window.handlePhoto = e => {
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>{
+      const canvas=document.createElement('canvas');
+      const scale=Math.min(1,800/img.width);
+      canvas.width=img.width*scale; canvas.height=img.height*scale;
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      currentPhotoData=canvas.toDataURL('image/jpeg',0.7);
+      document.getElementById('photoPreview').src=currentPhotoData;
+      document.getElementById('photoPreview').style.display='block';
+      document.getElementById('photoPlaceholder').style.display='none';
+      document.getElementById('confirmBtn').disabled=false;
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.confirmDose = async () => {
+  if (currentDoseIndex===null) return;
+  const btn=document.getElementById('confirmBtn');
+  btn.disabled=true; btn.textContent='Saving…';
+  const data=await getPatDoc(patientDocId);
+  const today=getTodayKey();
+  const doses=data.doses[today];
+  doses[currentDoseIndex]={...doses[currentDoseIndex],status:'done',photo:currentPhotoData,takenAt:new Date().toISOString()};
+  await setPatDoc(patientDocId,{doses:{...data.doses,[today]:doses}});
+  closeModal(); renderDoses();
+  showBanner('✅','Dose logged!','Your caregiver has been notified in real-time.');
+  btn.textContent='✓ Mark as Taken';
+};
+
+// ─── PARTNER / CAREGIVER ───────────────────────────────
+async function initPartnerUI() {
+  const savedCode  = localStorage.getItem(`mcp_code_${currentUser.uid}`);
+  const savedDocId = localStorage.getItem(`mcp_docid_${currentUser.uid}`);
+  if (savedCode && savedDocId) {
+    document.getElementById('connectCode').value = savedCode;
+    patientDocId = savedDocId;
+    startPartnerMonitor();
+  }
+}
+
+window.connectToPatient = async () => {
+  const code = document.getElementById('connectCode').value.trim().toUpperCase();
+  if (!code) { showBanner('⚠️','Enter code','Please enter the Partner Code.'); return; }
+  setSyncStatus('syncing','searching…');
+  const q    = query(collection(db,'patients'), where('partnerCode','==',code));
+  const snap = await getDocs(q);
+  if (snap.empty) { setSyncStatus('error','not found'); showBanner('❌','Not found','No patient found with that code.'); return; }
+  const docSnap = snap.docs[0];
+  patientDocId  = docSnap.id;
+  localStorage.setItem(`mcp_code_${currentUser.uid}`,  code);
+  localStorage.setItem(`mcp_docid_${currentUser.uid}`, patientDocId);
+  const d = docSnap.data();
+  document.getElementById('partnerPatientName').textContent = `Monitoring: ${d.medName||d.displayName||'Patient'}`;
+  startPartnerMonitor();
+};
+
+function startPartnerMonitor() {
+  document.getElementById('partnerConnect').style.display  = 'none';
+  document.getElementById('partnerMonitor').style.display  = 'block';
+  document.getElementById('partnerDateStrip').textContent  =
+    new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+  if (unsubListener) unsubListener();
+  setSyncStatus('live','live');
+  unsubListener = listenPatDoc(patientDocId, data => {
+    setSyncStatus('live','live');
+    if (data.medName) document.getElementById('partnerPatientName').textContent=`Monitoring: ${data.medName}`;
+    renderPartnerView(data);
+  });
+}
+
+function renderPartnerView(data) {
+  const today=getTodayKey();
+  const doses=(data.doses&&data.doses[today])||[];
+  const medName=data.medName||'Medication';
+  const done=doses.filter(d=>d.status==='done').length;
+  const missed=doses.filter(d=>d.status==='missed').length;
+  const pending=doses.filter(d=>d.status==='pending').length;
+  document.getElementById('partnerSummary').innerHTML=`
+    <div class="summary-chip chip-done"><div class="num">${done}</div><div class="lbl">Taken</div></div>
+    <div class="summary-chip chip-missed"><div class="num">${missed}</div><div class="lbl">Missed</div></div>
+    <div class="summary-chip chip-pending"><div class="num">${pending}</div><div class="lbl">Pending</div></div>`;
+  const log=document.getElementById('partnerLog');
+  if (!doses.length) { log.innerHTML=`<div class="empty-state"><div class="empty-icon">💊</div><h3>No doses today</h3><p>Doses appear once the patient sets up their medication.</p></div>`; return; }
+  log.innerHTML='';
+  doses.forEach((dose,i)=>{
+    const [h,m]=dose.time.split(':').map(Number);
+    const dt=new Date(2000,0,1,h,m).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    let icon='⏳',ic='pending',st='Pending';
+    if (dose.status==='done')   { icon='✅'; ic='done';   st=`Taken at ${dose.takenAt?new Date(dose.takenAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'?'}`; }
+    if (dose.status==='missed') { icon='❌'; ic='missed'; st='Missed'; }
+    const entry=document.createElement('div');
+    entry.className='log-entry'; entry.style.animationDelay=`${i*0.06}s`;
+    entry.innerHTML=`
+      <div class="log-icon ${ic}">${icon}</div>
+      <div class="log-body">
+        <div class="log-title">${dose.label} dose — ${dt}</div>
+        <div class="log-meta">${medName} · ${st}</div>
+        ${dose.photo?`<img class="log-proof" src="${dose.photo}" alt="Proof">`:''}
+      </div>`;
+    log.appendChild(entry);
+  });
+}
+
+window.disconnectPartner = () => {
+  if (unsubListener) { unsubListener(); unsubListener=null; }
+  localStorage.removeItem(`mcp_code_${currentUser.uid}`);
+  localStorage.removeItem(`mcp_docid_${currentUser.uid}`);
+  localStorage.removeItem(`mcr_${currentUser.uid}`);
+  document.getElementById('partnerConnect').style.display='block';
+  document.getElementById('partnerMonitor').style.display='none';
+  document.getElementById('connectCode').value='';
+  patientDocId=null;
+  showScreen('roleScreen');
+};
+
+// ─── offline ───────────────────────────────────────────
+window.addEventListener('online',  ()=>{ document.getElementById('offlineBanner').style.display='none'; });
+window.addEventListener('offline', ()=>{ document.getElementById('offlineBanner').style.display='block'; setSyncStatus('error','offline'); });
+</script>
 </body>
 </html>
